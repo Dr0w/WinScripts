@@ -37,3 +37,8 @@ cd "C:\path\to\your\script\directory"
 ```
 .\Import_AzureAD.ps1
 ```
+- In case you will receive a message like “.ps1 is not digitally signed. The script will not execute on the system.” , run:
+```
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+>This command sets the execution policy to bypass for only the current PowerShell session after the window is closed, the next PowerShell session will open running with the default execution policy. “Bypass” means nothing is blocked and no warnings, prompts, or messages will be displayed.
