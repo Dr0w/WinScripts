@@ -59,33 +59,53 @@ if ($connected) {
     $computersCsvPath = "$outputDir\Computers.csv"
 
     try {
-        Write-Host "Exporting users..." -ForegroundColor Cyan
-        # Fetch and export users
-        $users = Get-MgUser -All
-        $userData = @()
-        foreach ($user in $users) {
-            $manager = (Get-MgUserManager -UserId $user.Id -ErrorAction SilentlyContinue).Id
-            $memberOf = (Get-MgUserMemberOf -UserId $user.Id).Id -join ";"
-            if (-not (Is-ValidUUID $user.Id)) {
-                Write-Host "Invalid UUID found for user: $($user.Id)" -ForegroundColor Red
-                continue
+    Write-Host "Fetching list of users..." -ForegroundColor Cyan
+    $users = Get-MgUser -All
+
+    Write-Host "Fetching detailed properties for users..." -ForegroundColor Cyan
+    $userData = @()
+
+    foreach ($user in $users) {
+        try {
+            $userWithDetails = Get-MgUser -UserId $user.Id -Property "displayName,givenName,surname,department,jobTitle,mail,mobilePhone,officeLocation,country,companyName,city"
+
+            # Check if userWithDetails is not null
+            if ($userWithDetails) {
+                $manager = (Get-MgUserManager -UserId $user.Id -ErrorAction SilentlyContinue).Id
+                $memberOf = (Get-MgUserMemberOf -UserId $user.Id).Id -join ";"
+
+                $userObject = [PSCustomObject]@{
+                    UUID = $user.Id
+                    Username = $user.UserPrincipalName
+                    Email = $user.Mail
+                    Description = $user.JobTitle
+                    ManagerUUID = $manager
+                    memberOf = Escape-Field($memberOf)
+                    wbsn_full_name = "attr:wbsn_full_name/=/$(Escape-Field($userWithDetails.DisplayName))"
+                    wbsn_department = "attr:wbsn_department/=/$(Escape-Field($userWithDetails.Department))"
+                    wbsn_title = "attr:wbsn_title/=/$(Escape-Field($userWithDetails.JobTitle))"
+                    wbsn_telephone_number = "attr:wbsn_telephone_number/=/$(Escape-Field($userWithDetails.MobilePhone))"
+                    first_name = "attr:First Name/=/$(Escape-Field($userWithDetails.GivenName))"
+                    last_name = "attr:Last Name/=/$(Escape-Field($userWithDetails.Surname))"
+                }
+
+                $userData += $userObject
+            } else {
+                Write-Host "User details not retrieved for $($user.UserPrincipalName)" -ForegroundColor Yellow
             }
-            $userData += [PSCustomObject]@{
-                UUID = $user.Id
-                Username = $user.UserPrincipalName
-                Email = $user.Mail
-                Description = $user.JobTitle
-                ManagerUUID = $manager
-                memberOf = Escape-Field($memberOf)
-            }
+        } catch {
+            Write-Host "Error processing user $($user.UserPrincipalName): $_" -ForegroundColor Red
         }
-        # Export without headers
-        $userData | ConvertTo-Csv -NoTypeInformation | Select-Object -Skip 1 | Out-File -FilePath $usersCsvPath -Encoding utf8
-        Write-Host "Users exported successfully to $usersCsvPath" -ForegroundColor Green
-    } catch {
-        Write-Host "Failed to export users. Please check for potential issues in the user data retrieval process." -ForegroundColor Red
-        $success = $false
     }
+
+    # Export user data to CSV without headers
+    $userData | ConvertTo-Csv -NoTypeInformation | Select-Object -Skip 1 | Out-File -FilePath $usersCsvPath -Encoding utf8
+    Write-Host "Users exported successfully to $usersCsvPath" -ForegroundColor Green
+
+} catch {
+    Write-Host "Failed to export users. Error: $_" -ForegroundColor Red
+    $success = $false
+}
 
     if ($success -and $connected) {
         try {
