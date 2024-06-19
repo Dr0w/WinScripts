@@ -149,9 +149,9 @@ if ($connected) {
                 $computerData += [PSCustomObject]@{
                     UUID = $computer.Id
                     Name = $computer.DisplayName
-                    FQDN = $computer.DeviceOSType
+                    FQDN = $computer.DisplayName
                     Description = $computer.DeviceTrustType
-                    memberOf = ""
+                    memberOf = $computer.DeviceId
                 }
             }
             # Export without headers
