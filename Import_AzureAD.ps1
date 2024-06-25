@@ -13,6 +13,11 @@ function Escape-Field($field) {
     return $field
 }
 
+# Function to remove non-printable characters
+function Remove-NonPrintableCharacters($text) {
+    return $text -replace '[^\x20-\x7E]', ''
+}
+
 # Validate UUID format (case insensitive)
 function Is-ValidUUID($uuid) {
     return $uuid -match '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
@@ -93,10 +98,10 @@ if ($connected) {
                     Description = $user.JobTitle
                     ManagerUUID = $manager
                     memberOf = Escape-Field($memberOf)
-                    wbsn_full_name = "attr:wbsn_full_name/=/$(Escape-Field($userWithDetails.DisplayName))"
-                    wbsn_department = "attr:wbsn_department/=/$(Escape-Field($userWithDetails.Department))"
-                    wbsn_title = "attr:wbsn_title/=/$(Escape-Field($userWithDetails.JobTitle))"
-                    wbsn_telephone_number = "attr:wbsn_telephone_number/=/$(Escape-Field($userWithDetails.MobilePhone))"
+                    wbsn_full_name = "attr:wbsn_full_name/=/$(Escape-Field(Remove-NonPrintableCharacters($userWithDetails.DisplayName)))"
+                    wbsn_department = "attr:wbsn_department/=/$(Escape-Field(Remove-NonPrintableCharacters($userWithDetails.Department)))"
+                    wbsn_title = "attr:wbsn_title/=/$(Escape-Field(Remove-NonPrintableCharacters($userWithDetails.JobTitle)))"
+                    wbsn_telephone_number = "attr:wbsn_telephone_number/=/$(Escape-Field(Remove-NonPrintableCharacters($userWithDetails.MobilePhone)))"
                     first_name = "attr:First Name/=/$(Escape-Field($userWithDetails.GivenName))"
                     last_name = "attr:Last Name/=/$(Escape-Field($userWithDetails.Surname))"
                 }
