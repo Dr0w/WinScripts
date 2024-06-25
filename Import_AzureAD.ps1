@@ -28,6 +28,18 @@ function Test-GraphConnection {
     }
 }
 
+# Function to get all parent groups of a given group
+function Get-AllParentGroups($groupId, $parentGroups = @()) {
+    $parentGroupIds = (Get-MgGroupMemberOf -GroupId $groupId).Id
+    foreach ($parentId in $parentGroupIds) {
+        if (-not $parentGroups.Contains($parentId)) {
+            $parentGroups += $parentId
+            $parentGroups = Get-AllParentGroups -groupId $parentId -parentGroups $parentGroups
+        }
+    }
+    return $parentGroups
+}
+
 # Initialize success flag
 $success = $true
 
@@ -114,7 +126,7 @@ if ($connected) {
             $groups = Get-MgGroup -All
             $groupData = @()
             foreach ($group in $groups) {
-                $memberOf = (Get-MgGroupMemberOf -GroupId $group.Id).Id -join ";"
+                $memberOf = Get-AllParentGroups -groupId $group.Id -parentGroups @()
                 if (-not (Is-ValidUUID $group.Id)) {
                     Write-Host "Invalid UUID found for group: $($group.Id)" -ForegroundColor Red
                     continue
@@ -123,7 +135,7 @@ if ($connected) {
                     UUID = $group.Id
                     GroupName = $group.DisplayName
                     Description = $group.Description
-                    memberOf = Escape-Field($memberOf)
+                    memberOf = Escape-Field($memberOf -join ";")
                 }
             }
             # Export without headers
