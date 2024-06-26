@@ -1,3 +1,9 @@
+param(
+    [string]$tenantId,
+    [string]$clientId,
+    [string]$clientSecret
+)
+
 # Import the Microsoft.Graph module
 Import-Module Microsoft.Graph
 
@@ -51,19 +57,27 @@ $success = $true
 Write-Host "Starting Azure AD export procedure" -ForegroundColor Cyan
 
 try {
+    # Authenticate using Service Principal
+    Write-Host "Authenticating using Service Principal..." -ForegroundColor Cyan
+    $tokenBody = @{
+        client_id     = $clientId
+        scope         = "https://graph.microsoft.com/.default"
+        client_secret = $clientSecret
+        grant_type    = "client_credentials"
+        tenant_id     = $tenantId
+    }
+
+    $tokenResponse = Invoke-RestMethod -Method Post -Uri "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token" -Body $tokenBody -ContentType 'application/x-www-form-urlencoded'
+    $accessToken = ConvertTo-SecureString -String $tokenResponse.access_token -AsPlainText -Force
+
+    Connect-MgGraph -AccessToken $accessToken
+} catch {
+    # Manual browser authentication (if needed)
     Write-Host "Initiating connection to MS Graph API (this might take some time)..." -ForegroundColor Cyan
     Connect-MgGraph -Scopes $scopes
-    $connected = Test-GraphConnection
-    if ($connected) {
-        Write-Host "Successfully connected to MS Graph API" -ForegroundColor Green
-    } else {
-        throw "Failed to validate the MS Graph API connection."
-    }
-} catch {
-    Write-Host "Failed to authenticate to Microsoft Graph. Please check your credentials and network connection." -ForegroundColor Red
-    $connected = $false
-    $success = $false
 }
+
+$connected = Test-GraphConnection
 
 if ($connected) {
     # Define the output directory and file paths
@@ -76,53 +90,53 @@ if ($connected) {
     $computersCsvPath = "$outputDir\Computers.csv"
 
     try {
-    Write-Host "Fetching list of users..." -ForegroundColor Cyan
-    $users = Get-MgUser -All
+        Write-Host "Fetching list of users..." -ForegroundColor Cyan
+        $users = Get-MgUser -All
 
-    Write-Host "Fetching detailed properties for users..." -ForegroundColor Cyan
-    $userData = @()
+        Write-Host "Fetching detailed properties for users..." -ForegroundColor Cyan
+        $userData = @()
 
-    foreach ($user in $users) {
-        try {
-            $userWithDetails = Get-MgUser -UserId $user.Id -Property "displayName,givenName,surname,department,jobTitle,mail,mobilePhone,officeLocation,country,companyName,city"
+        foreach ($user in $users) {
+            try {
+                $userWithDetails = Get-MgUser -UserId $user.Id -Property "displayName,givenName,surname,department,jobTitle,mail,mobilePhone,officeLocation,country,companyName,city"
 
-            # Check if userWithDetails is not null
-            if ($userWithDetails) {
-                $manager = (Get-MgUserManager -UserId $user.Id -ErrorAction SilentlyContinue).Id
-                $memberOf = (Get-MgUserMemberOf -UserId $user.Id).Id -join ";"
+                # Check if userWithDetails is not null
+                if ($userWithDetails) {
+                    $manager = (Get-MgUserManager -UserId $user.Id -ErrorAction SilentlyContinue).Id
+                    $memberOf = (Get-MgUserMemberOf -UserId $user.Id).Id -join ";"
 
-                $userObject = [PSCustomObject]@{
-                    UUID = $user.Id
-                    Username = $user.UserPrincipalName
-                    Email = $user.Mail
-                    Description = $user.JobTitle
-                    ManagerUUID = $manager
-                    memberOf = Escape-Field($memberOf)
-                    wbsn_full_name = "attr:wbsn_full_name/=/$(Escape-Field(Remove-NonPrintableCharacters($userWithDetails.DisplayName)))"
-                    wbsn_department = "attr:wbsn_department/=/$(Escape-Field(Remove-NonPrintableCharacters($userWithDetails.Department)))"
-                    wbsn_title = "attr:wbsn_title/=/$(Escape-Field(Remove-NonPrintableCharacters($userWithDetails.JobTitle)))"
-                    wbsn_telephone_number = "attr:wbsn_telephone_number/=/$(Escape-Field(Remove-NonPrintableCharacters($userWithDetails.MobilePhone)))"
-                    first_name = "attr:First Name/=/$(Escape-Field($userWithDetails.GivenName))"
-                    last_name = "attr:Last Name/=/$(Escape-Field($userWithDetails.Surname))"
+                    $userObject = [PSCustomObject]@{
+                        UUID = $user.Id
+                        Username = $user.UserPrincipalName
+                        Email = $user.Mail
+                        Description = $user.JobTitle
+                        ManagerUUID = $manager
+                        memberOf = Escape-Field($memberOf)
+                        wbsn_full_name = "attr:wbsn_full_name/=/$(Escape-Field(Remove-NonPrintableCharacters($userWithDetails.DisplayName)))"
+                        wbsn_department = "attr:wbsn_department/=/$(Escape-Field(Remove-NonPrintableCharacters($userWithDetails.Department)))"
+                        wbsn_title = "attr:wbsn_title/=/$(Escape-Field(Remove-NonPrintableCharacters($userWithDetails.JobTitle)))"
+                        wbsn_telephone_number = "attr:wbsn_telephone_number/=/$(Escape-Field(Remove-NonPrintableCharacters($userWithDetails.MobilePhone)))"
+                        first_name = "attr:First Name/=/$(Escape-Field($userWithDetails.GivenName))"
+                        last_name = "attr:Last Name/=/$(Escape-Field($userWithDetails.Surname))"
+                    }
+
+                    $userData += $userObject
+                } else {
+                    Write-Host "User details not retrieved for $($user.UserPrincipalName)" -ForegroundColor Yellow
                 }
-
-                $userData += $userObject
-            } else {
-                Write-Host "User details not retrieved for $($user.UserPrincipalName)" -ForegroundColor Yellow
+            } catch {
+                Write-Host "Error processing user $($user.UserPrincipalName): $_" -ForegroundColor Red
             }
-        } catch {
-            Write-Host "Error processing user $($user.UserPrincipalName): $_" -ForegroundColor Red
         }
+
+        # Export user data to CSV without headers
+        $userData | ConvertTo-Csv -NoTypeInformation | Select-Object -Skip 1 | Out-File -FilePath $usersCsvPath -Encoding utf8
+        Write-Host "Users exported successfully to $usersCsvPath" -ForegroundColor Green
+
+    } catch {
+        Write-Host "Failed to export users. Error: $_" -ForegroundColor Red
+        $success = $false
     }
-
-    # Export user data to CSV without headers
-    $userData | ConvertTo-Csv -NoTypeInformation | Select-Object -Skip 1 | Out-File -FilePath $usersCsvPath -Encoding utf8
-    Write-Host "Users exported successfully to $usersCsvPath" -ForegroundColor Green
-
-} catch {
-    Write-Host "Failed to export users. Error: $_" -ForegroundColor Red
-    $success = $false
-}
 
     if ($success -and $connected) {
         try {
