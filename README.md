@@ -5,9 +5,10 @@ Prerequisites:
 - Microsoft Graph PowerShell Module
 - PowerShell 7 (or later)
 - .NET Framework 4.7.2 (or later)
+- Azure App configured for Service Principal Authentication
 
-## Upgrade to PowerShell 5.1 or Later
-- Ensure your PowerShell version is 5.1 or later. You can check your PowerShell version by running:
+## Upgrade to PowerShell 7 or Later
+- Ensure your PowerShell version is 7 or later. You can check your PowerShell version by running:
 $PSVersionTable.PSVersion
 
 ## Powershell distribution site:
@@ -22,6 +23,8 @@ https://dotnet.microsoft.com/en-us/download/dotnet-framework/net472
 - Follow the instructions here:
 https://learn.microsoft.com/en-us/powershell/microsoftgraph/installation?view=graph-powershell-1.0
 
+## Azure App configured for Service Principal Authentication
+
 ## Steps to Run the Script
 - Open PowerShell as Administrator.
 - Install the Microsoft.Graph Module:
@@ -33,10 +36,15 @@ Install-Module -Name Microsoft.Graph -Scope CurrentUser
 ```
 cd "C:\path\to\your\script\directory"
 ```
-- Execute the script:
+- Execute the script with browser authentication:
 ```
 .\Import_AzureAD.ps1
 ```
+- Execute the script with service principal authentication:
+```
+.\Import_AzureAD.ps1 -tenantId "your-tenant-id" -clientId "your-client-id" -clientSecret "your-client-secret"
+```
+
 - In case you will receive a message like “.ps1 is not digitally signed. The script will not execute on the system.” , run:
 ```
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
